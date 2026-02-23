@@ -1,33 +1,31 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
+from typing import Optional
 
+# -------- USER --------
 
-class HospitalBase(BaseModel):
-    name: str
-    latitude: float
-    longitude: float
-    address: str | None = None
-    phone: str | None = None
-    has_sus: bool = False
-    has_private: bool = False
-    emergency_24h: bool = False
-
-class HospitalResponse(HospitalBase):
-        id: int
-        distance_km: float | None = None
-
-        class Config:
-              from_attributes = True
-    
 class UserCreate(BaseModel):
-    email: str
+    name: str
+    email: EmailStr
     password: str
-
 
 class UserLogin(BaseModel):
-    email: str
+    email: EmailStr
     password: str
-
 
 class Token(BaseModel):
     access_token: str
     token_type: str
+
+# -------- HOSPITAL --------
+
+class HospitalBase(BaseModel):
+    name: str
+    address: Optional[str] = None
+    latitude: float
+    longitude: float
+
+class HospitalResponse(HospitalBase):
+    id: int
+
+    class Config:
+        from_attributes = True

@@ -1,12 +1,17 @@
 from fastapi import FastAPI, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from .database import SessionLocal, engine
-from . import models, schemas, crud
+from database import SessionLocal, engine
+import models
+import schemas
+import auth
 
 models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="Sistema Hospitalar API")
+
+
+# ---------- DATABASE DEPENDENCY ----------
 
 def get_db():
     db = SessionLocal()
@@ -16,30 +21,70 @@ def get_db():
         db.close()
 
 
+# ---------- AUTH ROUTES ----------
+
+@app.post("/register", response_model=schemas.Token)
+def register(user: schemas.UserCreate, db: Session = Depends(get_db)):
+
+    existing_user = db.query(models.User).filter(
+        models.User.email == user.email
+    ).first()
+
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Email já cadastrado")
+
+    hashed_password = auth.get_password_hash(user.password)
+
+    new_user = models.User(
+        name=user.name,
+        email=user.email,
+        password=hashed_password
+    )
+
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+
+    access_token = auth.create_access_token(
+        data={"sub": new_user.email}
+    )
+
+    return {"access_token": access_token, "token_type": "bearer"}
+
+
+@app.post("/login", response_model=schemas.Token)
+def login(user: schemas.UserLogin, db: Session = Depends(get_db)):
+
+    db_user = db.query(models.User).filter(
+        models.User.email == user.email
+    ).first()
+
+    if not db_user:
+        raise HTTPException(status_code=401, detail="Credenciais inválidas")
+
+    if not auth.verify_password(user.password, db_user.password):
+        raise HTTPException(status_code=401, detail="Credenciais inválidas")
+
+    access_token = auth.create_access_token(
+        data={"sub": db_user.email}
+    )
+
+    return {"access_token": access_token, "token_type": "bearer"}
+
+
+# ---------- HOSPITAL ROUTES ----------
+
 @app.get("/hospitals", response_model=list[schemas.HospitalResponse])
 def list_hospitals(db: Session = Depends(get_db)):
     return db.query(models.Hospital).all()
 
 
-@app.get("/hospitals/{hospital_id}", response_model=schemas.HospitalResponse)
-def get_hospital(hospital_id: int, db: Session = Depends(get_db)):
-    hospital = db.query(models.Hospital).filter(
-        models.Hospital.id == hospital_id
-    ).first()
-
-    if not hospital:
-        raise HTTPException(status_code=404, detail="Hospital não encontrado")
-
-    return hospital
-
-
-@app.get("/hospitals/nearby", response_model=list[schemas.HospitalResponse])
-def nearby_hospitals(lat: float, lng: float, db: Session = Depends(get_db)):
-    return crud.get_nearby_hospitals(db, lat, lng)
-
-
 @app.post("/hospitals", response_model=schemas.HospitalResponse)
-def create_hospital(hospital: schemas.HospitalBase, db: Session = Depends(get_db)):
+def create_hospital(
+    hospital: schemas.HospitalBase,
+    db: Session = Depends(get_db),
+    current_user = Depends(auth.get_current_user)  # 🔒 protegida
+):
     new_hospital = models.Hospital(**hospital.dict())
     db.add(new_hospital)
     db.commit()
