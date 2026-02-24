@@ -12,5 +12,5 @@ export default function AppLayout() {
     }
   }, [token]);
 
-  return <Stack screenOptions={{ headerShown: true }} />;
+  return <Stack screenOptions={{ headerShown: false }} />;
 }
