@@ -1,6 +1,6 @@
 from fastapi import FastAPI, Depends, HTTPException
 from sqlalchemy.orm import Session
-
+from fastapi.security import OAuth2PasswordRequestForm
 from database import SessionLocal, engine
 import models
 import schemas
@@ -52,17 +52,19 @@ def register(user: schemas.UserCreate, db: Session = Depends(get_db)):
     return {"access_token": access_token, "token_type": "bearer"}
 
 
+from fastapi.security import OAuth2PasswordRequestForm
+
 @app.post("/login", response_model=schemas.Token)
-def login(user: schemas.UserLogin, db: Session = Depends(get_db)):
+def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
 
     db_user = db.query(models.User).filter(
-        models.User.email == user.email
+        models.User.email == form_data.username
     ).first()
 
     if not db_user:
         raise HTTPException(status_code=401, detail="Credenciais inválidas")
 
-    if not auth.verify_password(user.password, db_user.password):
+    if not auth.verify_password(form_data.password, db_user.password):
         raise HTTPException(status_code=401, detail="Credenciais inválidas")
 
     access_token = auth.create_access_token(
